@@ -32,6 +32,8 @@ import {
 	blobFromSync,
 	blobFrom
 } from 'fetch-blob/from.js';
+import { performance } from 'node:perf_hooks';
+
 
 export {FormData, Headers, Request, Response, FetchError, AbortError, isRedirect};
 export {Blob, File, fileFromSync, fileFrom, blobFromSync, blobFrom};
@@ -50,6 +52,29 @@ export default async function fetch(url, options_) {
 		// Build request object
 		const request = new Request(url, options_);
 		const {parsedURL, options} = getNodeRequestOptions(request);
+    const timing = {
+      startTime: performance.now(),
+      endTime: 0,
+      finalNetworkResponseStartTime: 0,
+      finalNetworkRequestStartTime: 0,
+      redirectStartTime: 0,
+      finalConnectionTimingInfo: {
+        connectionEndTime: 0,
+        secureConnectionEndTime: 0,
+        domainLookupEndTime: 0,
+      },
+      renderBlocking: false,
+    }
+    function markEndTiming(){
+      performance.markResourceTiming(
+        timing,
+        parsedURL.href,
+        'node-fetch',
+        {},
+        ''
+      );
+    }
+
 		if (!supportedSchemas.has(parsedURL.protocol)) {
 			throw new TypeError(`node-fetch cannot load ${url}. URL scheme "${parsedURL.protocol.replace(/:$/, '')}" is not supported.`);
 		}
@@ -92,6 +117,7 @@ export default async function fetch(url, options_) {
 
 		// Send request
 		const request_ = send(parsedURL.toString(), options);
+    timing.finalNetworkRequestStartTime = performance.now();
 
 		if (signal) {
 			signal.addEventListener('abort', abortAndFinalize);
@@ -134,14 +160,35 @@ export default async function fetch(url, options_) {
 				});
 			});
 		}
+    request_.on('socket', socket => {
+      socket.once('lookup', () => {
+          timing.finalConnectionTimingInfo.domainLookupEndTime = performance.now();
+      });
+      socket.once('connect', () => {
+        timing.finalConnectionTimingInfo.connectionEndTime = performance.now();
+      });
+
+      socket.once('secureConnect', () => {
+        timing.finalConnectionTimingInfo.secureConnectionEndTime = performance.now();
+      });
+    });
 
 		request_.on('response', response_ => {
 			request_.setTimeout(0);
 			const headers = fromRawHeaders(response_.rawHeaders);
 
+      response_.once('data', () => {
+        timing.finalNetworkResponseStartTime = performance.now();
+      });
+      response_.once('end', () => {
+        timing.endTime = performance.now();
+        markEndTiming();
+      });
+
 			// HTTP fetch step 5
 			if (isRedirect(response_.statusCode)) {
 				// HTTP fetch step 5.2
+        timing.redirectStartTime = performance.now();
 				const location = headers.get('Location');
 
 				// HTTP fetch step 5.3
@@ -346,6 +393,7 @@ export default async function fetch(url, options_) {
 						resolve(response);
 					}
 				});
+        timing['redirectEnd'] = performance.now();
 				return;
 			}
 
