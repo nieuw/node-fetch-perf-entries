@@ -1,7 +1,7 @@
 {
-  "name": "node-fetch",
+  "name": "node-fetch-perf-entries",
   "version": "3.1.1",
-  "description": "A light-weight module that brings Fetch API to node.js",
+  "description": "A fork of node fetch this adds performance resource entries",
   "main": "./src/index.js",
   "sideEffects": false,
   "type": "module",
@@ -19,10 +19,6 @@
     "test-types": "tsd",
     "lint": "xo"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/node-fetch/node-fetch.git"
-  },
   "keywords": [
     "fetch",
     "http",
@@ -33,16 +29,7 @@
     "xhr",
     "whatwg"
   ],
-  "author": "David Frank",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/node-fetch/node-fetch/issues"
-  },
-  "homepage": "https://github.com/node-fetch/node-fetch",
-  "funding": {
-    "type": "opencollective",
-    "url": "https://opencollective.com/node-fetch"
-  },
+  "author": "Robin",
   "devDependencies": {
     "abort-controller": "^3.0.0",
     "abortcontroller-polyfill": "^1.7.1",
