@@ -65,7 +65,7 @@ export default async function fetch(url, options_) {
       },
       renderBlocking: false,
     }
-    function markEndTiming(){
+    function markResourceTiming(){
       performance.markResourceTiming(
         timing,
         parsedURL.href,
@@ -182,7 +182,7 @@ export default async function fetch(url, options_) {
       });
       response_.once('end', () => {
         timing.endTime = performance.now();
-        markEndTiming();
+        markResourceTiming();
       });
 
 			// HTTP fetch step 5
