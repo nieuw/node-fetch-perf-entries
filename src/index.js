@@ -77,6 +77,29 @@ export default function fetch(url, opts) {
 		const { signal } = request;
 		let response = null;
 
+    const timing = {
+      startTime: performance.now(),
+      endTime: 0,
+      finalNetworkResponseStartTime: 0,
+      finalNetworkRequestStartTime: 0,
+      redirectStartTime: 0,
+      finalConnectionTimingInfo: {
+        connectionEndTime: 0,
+        secureConnectionEndTime: 0,
+        domainLookupEndTime: 0,
+      },
+      renderBlocking: false,
+    }
+    function markResourceTiming(){
+      performance.markResourceTiming(
+        timing,
+        parsedURL.href,
+        'node-fetch',
+        {},
+        ''
+      );
+    }
+
 		const abort = ()  => {
 			let error = new AbortError('The user aborted a request.');
 			reject(error);
@@ -100,6 +123,20 @@ export default function fetch(url, opts) {
 		// send request
 		const req = send(options);
 		let reqTimeout;
+
+    timing.finalNetworkRequestStartTime = performance.now();    
+    req.on('socket', socket => {
+      socket.once('lookup', () => {
+          timing.finalConnectionTimingInfo.domainLookupEndTime = performance.now();
+      });
+      socket.once('connect', () => {
+        timing.finalConnectionTimingInfo.connectionEndTime = performance.now();
+      });
+
+      socket.once('secureConnect', () => {
+        timing.finalConnectionTimingInfo.secureConnectionEndTime = performance.now();
+      });
+    });
 
 		if (signal) {
 			signal.addEventListener('abort', abortAndFinalize);
@@ -162,11 +199,20 @@ export default function fetch(url, opts) {
 		req.on('response', res => {
 			clearTimeout(reqTimeout);
 
+      res.once('data', () => {
+        timing.finalNetworkResponseStartTime = performance.now();
+      });
+      res.once('end', () => {
+        timing.endTime = performance.now();
+        markResourceTiming();
+      });
+
 			const headers = createHeadersLenient(res.headers);
 
 			// HTTP fetch step 5
 			if (fetch.isRedirect(res.statusCode)) {
 				// HTTP fetch step 5.2
+        timing.redirectStartTime = performance.now();
 				const location = headers.get('Location');
 
 				// HTTP fetch step 5.3
@@ -180,6 +226,7 @@ export default function fetch(url, opts) {
 					if (request.redirect !== 'manual') {
 						reject(new FetchError(`uri requested responds with an invalid redirect URL: ${location}`, 'invalid-redirect'));
 						finalize();
+            timing['redirectEnd'] = performance.now();
 						return;
 					}
 				}
@@ -189,6 +236,7 @@ export default function fetch(url, opts) {
 					case 'error':
 						reject(new FetchError(`uri requested responds with a redirect, redirect mode is set to error: ${request.url}`, 'no-redirect'));
 						finalize();
+            timing['redirectEnd'] = performance.now();
 						return;
 					case 'manual':
 						// node-fetch-specific step: make manual redirect a bit easier to use by setting the Location header value to the resolved URL.
@@ -212,6 +260,7 @@ export default function fetch(url, opts) {
 						if (request.counter >= request.follow) {
 							reject(new FetchError(`maximum redirect reached at: ${request.url}`, 'max-redirect'));
 							finalize();
+              timing['redirectEnd'] = performance.now();
 							return;
 						}
 
@@ -240,6 +289,7 @@ export default function fetch(url, opts) {
 						if (res.statusCode !== 303 && request.body && getTotalBytes(request) === null) {
 							reject(new FetchError('Cannot follow redirect with body being a readable stream', 'unsupported-redirect'));
 							finalize();
+              timing['redirectEnd'] = performance.now();
 							return;
 						}
 
@@ -253,6 +303,7 @@ export default function fetch(url, opts) {
 						// HTTP-redirect fetch step 15
 						resolve(fetch(new Request(locationURL, requestOpts)));
 						finalize();
+            timing['redirectEnd'] = performance.now();
 						return;
 				}
 			}
