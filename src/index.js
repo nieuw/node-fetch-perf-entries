@@ -93,7 +93,7 @@ export default function fetch(url, opts) {
     function markResourceTiming(){
       performance.markResourceTiming(
         timing,
-        parsedURL.href,
+        url,
         'node-fetch',
         {},
         ''
